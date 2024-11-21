@@ -4,6 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import matplotlib.pylab as plt
 import numpy as np
+from sklearn import metrics
 
 import os
 import torch
@@ -76,8 +77,8 @@ class MNIST_data:
         val_size = len(mnist_dataset) - train_size
         train_dataset, val_dataset = random_split(mnist_dataset, [train_size, val_size])
 
-        train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=False,drop_last=True)
-        val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, drop_last=True)
+        train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=False,drop_last=False)
+        val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, drop_last=False)
 
         return train_loader, val_loader
     
@@ -141,7 +142,7 @@ class MNIST:
 
     def evaluation(self, model):
         """
-        Evaluate the model's performance on the validation dataset.
+        Evaluate the model's accuracy on the validation dataset.
 
         model : torch.nn.Module
 
@@ -156,6 +157,28 @@ class MNIST:
                     count = count+1
         return count/(len(self.val_loader)*len(label))
     
+    def confusion_matrix_evaluation(self, model):
+        """
+        Dispalys the confusin matrix for evaluated data over the validation dataset.
+
+        model : torch.nn.Module
+
+        RETURN : X
+            X
+        """
+        model.eval()
+        y_pred = []
+        y_true = []
+        for img, label in self.val_loader:
+            for i in range(len(label)):
+                y_pred.append(model(img[i]).argmax())
+                y_true.append(label[i])
+
+        confusion_matrix = metrics.confusion_matrix(y_true, y_pred)
+
+        cm_display = metrics.ConfusionMatrixDisplay(confusion_matrix = confusion_matrix, display_labels = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
+        cm_display.plot()
+        plt.show()
     
 
     def submit(self, model):
@@ -240,14 +263,13 @@ class MNIST_gridSearch:
                 for criterion in self.criterions:
                     for epoch in self.epochs:
                         for l_rate in self.learning_rates:
-                            self.model = type(self.model)() ##
-                            self.model.train() ##
+                            current_model = type(self.model)() # creating a new instance
+                            current_model.train() ##
 
                             iteration += 1
-                            optim = optimizer(self.model.parameters(), lr=l_rate)
-                            self.mnist.train(self.model, criterion(), optim, epoch)
-
-                            score = self.mnist.evaluation(self.model)
+                            optim = optimizer(current_model.parameters(), lr=l_rate)
+                            self.mnist.train(current_model, criterion(), optim, epoch)
+                            score = self.mnist.evaluation(current_model)
 
                             if  verbose == 1 : print(f"Iteration {iteration} / {self.total_iterations} | score : {score}")
                             elif verbose >=2 : print(f"Iteration {iteration} / {self.total_iterations} | score : {score} | epoch : {epoch}")
@@ -255,6 +277,6 @@ class MNIST_gridSearch:
                                 best_param.update({"optimizer": optimizer, "criterion": criterion, 
                                                     "epochs": epoch, "learning_rate": l_rate, "batch_size": batch_size, 
                                                     "score": score})
-                                best_model = copy.deepcopy(self.model)
+                                best_model = copy.deepcopy(current_model)
         
         return best_param, best_model
