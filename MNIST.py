@@ -30,7 +30,7 @@ class MNIST_data:
         ratio of training images in the train image folder.
         The rest of the images will be allocated to the valdiation dataset
     """
-    def __init__(self, train_path, test_path, batch_size, train_split_ratio):
+    def __init__(self, train_path, test_path, batch_size, train_split_ratio=0.8):
         self.train_path = train_path
         self.test_path = test_path
         self.batch_size = batch_size
@@ -96,7 +96,25 @@ class MNIST_data:
         mnist_dataset_test = self.MNIST_test(pixels, test_df)
         test_loader = DataLoader(mnist_dataset_test, batch_size=batch_size, shuffle=False, drop_last=False)
         return test_loader
+    
+    def make_submission_train(self, in_batch_size=None):
+        """
+        Initializes train dataset with the whole dataset (to train the fine-tuned model on
+            a maximum amount of data).
 
+        RETURN : Dataloader
+            train_loader
+        """
+        batch_size = in_batch_size or self.batch_size
+        train_df = pd.read_csv(self.train_path)
+        labels = train_df['label'].values
+        pixels = train_df.drop(columns=['label']).values
+        dataset = self.MNIST_train(pixels, labels)
+
+        train_loader = DataLoader(dataset, batch_size=batch_size, shuffle=False,drop_last=False)
+
+
+        return train_loader
 
 
 class MNIST:
@@ -127,6 +145,25 @@ class MNIST:
         RETURN : dict
             dictionary containing the training loss for each batch.
         """
+
+        output = {'training_loss': []}  
+        for epoch in range(epochs):
+            if verbose : print(str(epoch) + " / " + str(epochs))
+            for i, (image, pred) in enumerate(self.train_loader):
+                optimizer.zero_grad()
+                z = model(image)
+                loss = criterion(z, pred)
+                loss.backward()
+                optimizer.step()
+                output['training_loss'].append(loss.data.item())
+        return output
+    
+    def train_to_submit(self, model, criterion, optimizer, epochs=10, verbose = 0):
+        """
+        Same as train but with the whole training dataset to optimize training.
+        Evaluating a model -on val_loader- trained with this function would be conceptualy wrong.
+        """
+        self.train_loader = self.mnist_data.make_submission_train()
         output = {'training_loss': []}  
         for epoch in range(epochs):
             if verbose : print(str(epoch) + " / " + str(epochs))
@@ -183,15 +220,18 @@ class MNIST:
 
     def submit(self, model):
         """
-        Generates predictions for the test set and saves them to a CSV file
+        Generates predictions for the test set and saves them to a CSV file.
+        The file {submission.csv} will be wiped and written on OR create
+        (depending on if the file already exists or not).
         
         model : torch.nn.Module
         
         RETURN : None
-            Saves the predictions to "submission.csv" (needs to be in the python file directory) formated to kaggle's
+            Saves the predictions to "submission.csv" formated to kaggle's
             submission standards.
         """
-        f = open("submission.csv", "a")
+        f = open("submission.csv", "w+")
+        f.truncate()
         f.write("ImageId,Label\n")
         i = 1
         for x in self.test_loader:
