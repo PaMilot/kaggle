@@ -78,7 +78,7 @@ class MNIST_data:
         train_dataset, val_dataset = random_split(mnist_dataset, [train_size, val_size])
 
         train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=False,drop_last=False)
-        val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, drop_last=False)
+        val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, drop_last=True)
 
         return train_loader, val_loader
     
